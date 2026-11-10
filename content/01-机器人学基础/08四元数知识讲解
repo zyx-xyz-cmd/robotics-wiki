@@ -1,0 +1,237 @@
+# 机器人运动学——四元数学习笔记
+
+> 定位：林沛群《机器人学之运动学》旋转矩阵、欧拉角与齐次变换章节的补充内容。  
+> 约定：数学公式统一采用 **标量在前** $q=(w,x,y,z)$；ROS2 消息字段采用 $(x,y,z,w)$。所有旋转均采用右手系、主动旋转、列向量约定。
+
+## 1. 为什么需要四元数
+
+机器人末端位姿由位置与姿态组成。位置可以用 $(p_x,p_y,p_z)$ 表示；姿态可以用旋转矩阵 $R\in SO(3)$、欧拉角或单位四元数表示。
+
+- 旋转矩阵有 9 个元素，但只有 3 个旋转自由度，适合直接变换向量。
+- 欧拉角用 3 个角度表示，比较直观，但特定姿态存在万向节死锁（参数奇异）。
+- 单位四元数用 4 个数及 1 个约束表示旋转，适合姿态复合与平滑插值。
+
+四元数**只描述旋转，不描述平移**。完整位姿仍需位置向量。
+
+## 2. 四元数的定义
+
+一般四元数写为
+
+$$
+q=w+xi+yj+zk=(w,\mathbf v),\qquad \mathbf v=(x,y,z).
+$$
+
+虚数单位满足
+
+$$
+i^2=j^2=k^2=-1,\qquad ij=k,\ jk=i,\ ki=j,
+$$
+
+反向相乘符号相反，例如 $ji=-k$。因此四元数乘法通常**不满足交换律**。
+
+四元数的共轭、模和逆：
+
+$$
+q^*=(w,-x,-y,-z),\qquad \|q\|=\sqrt{w^2+x^2+y^2+z^2},
+$$
+
+$$
+q^{-1}=\frac{q^*}{\|q\|^2}.
+$$
+
+表示旋转时要求 $\|q\|=1$，因此 $q^{-1}=q^*$。
+
+## 3. 从轴角理解四元数（最重要）
+
+根据轴角表示，任何三维空间的有限旋转都可表示为绕单位轴 $\mathbf u=(u_x,u_y,u_z)$ 旋转 $\theta$。
+
+对应的单位四元数是
+
+$$
+\boxed{q=\left(\cos\frac\theta2,\ u_x\sin\frac\theta2,\ u_y\sin\frac\theta2,\ u_z\sin\frac\theta2\right)}.
+$$
+
+**为什么是半角？** 四元数通过 $p'=qpq^{-1}$ 作用于三维向量；左右两次乘法共同形成实际的旋转角 $\theta$。初学时先记住公式并通过实验验证，暂时不必深究群论。
+
+### 例：绕 Z 轴旋转 90°
+
+$$
+\mathbf u=(0,0,1),\quad \theta=\frac\pi2,
+$$
+
+$$
+q=\left(\cos\frac\pi4,0,0,\sin\frac\pi4\right)
+=\left(\frac{\sqrt2}{2},0,0,\frac{\sqrt2}{2}\right).
+$$
+
+注意：这里的 $x,y,z$ 是四元数的**向量部分**，不是末端的位置坐标。
+
+### 特别注意：$q$ 与 $-q$
+
+$$
+q\quad\text{和}\quad -q
+$$
+
+代表**相同的三维旋转**。例如 $(1,0,0,0)$ 和 $(-1,0,0,0)$ 都表示恒等旋转。不能简单地把四元数的四个分量差当成姿态差。
+
+## 4. 如何真正旋转一个向量
+
+把三维向量 $\mathbf p=(p_x,p_y,p_z)$ 看作纯虚四元数 $P=(0,p_x,p_y,p_z)$，则
+
+$$
+\boxed{P'=qPq^{-1}}.
+$$
+
+所得 $P'$ 的向量部分就是旋转后的三维坐标。
+
+例：$\mathbf p=(1,0,0)$ 绕 Z 轴旋转 $90^\circ$，结果为 $(0,1,0)$。
+
+## 5. 四元数乘法与旋转复合
+
+设 $q_1=(w_1,\mathbf v_1)$，$q_2=(w_2,\mathbf v_2)$，则
+
+$$
+q_2q_1=\left(w_2w_1-\mathbf v_2\cdot\mathbf v_1,\ w_2\mathbf v_1+w_1\mathbf v_2+\mathbf v_2\times\mathbf v_1\right).
+$$
+
+在本文的主动旋转、列向量约定下：**先执行 $q_1$，再执行 $q_2$，总旋转是 $q_2q_1$**。旋转顺序一般不能交换。
+
+## 6. 四元数与旋转矩阵互相转换
+
+对于单位四元数 $q=(w,x,y,z)$，其主动旋转矩阵为
+
+$$
+R(q)=\begin{bmatrix}
+1-2(y^2+z^2)&2(xy-wz)&2(xz+wy)\\
+2(xy+wz)&1-2(x^2+z^2)&2(yz-wx)\\
+2(xz-wy)&2(yz+wx)&1-2(x^2+y^2)
+\end{bmatrix}.
+$$
+
+绕 Z 轴旋转 90° 时，
+
+$$
+R=\begin{bmatrix}0&-1&0\\1&0&0\\0&0&1\end{bmatrix}.
+$$
+
+由旋转矩阵反求四元数的一种方式是先计算
+
+$$
+w=\frac12\sqrt{1+\operatorname{tr}(R)},
+$$
+
+当 $w\neq0$ 时，
+
+$$
+x=\frac{R_{32}-R_{23}}{4w},\qquad
+y=\frac{R_{13}-R_{31}}{4w},\qquad
+z=\frac{R_{21}-R_{12}}{4w}.
+$$
+
+这里的矩阵下标从 1 开始。**接近 180° 旋转时 $w\approx0$，上述直接除以 $w$ 的方法不稳定**；实际代码应使用成熟库的稳定转换算法。
+
+## 7. 四元数与欧拉角的关系
+
+欧拉角通过按指定顺序绕坐标轴旋转描述姿态。**顺序很重要**：XYZ 与 ZYX 通常不一样。四元数也要和同一旋转约定匹配。
+
+常用的主动旋转 ZYX 约定（yaw-pitch-roll）：
+
+$$
+R=R_z(\psi)R_y(\theta)R_x(\phi),
+$$
+
+对应四元数
+
+$$
+q=q_z(\psi)q_y(\theta)q_x(\phi).
+$$
+
+单轴旋转四元数：
+
+$$
+q_x(\phi)=(\cos\tfrac\phi2,\sin\tfrac\phi2,0,0),
+$$
+
+$$
+q_y(\theta)=(\cos\tfrac\theta2,0,\sin\tfrac\theta2,0),
+$$
+
+$$
+q_z(\psi)=(\cos\tfrac\psi2,0,0,\sin\tfrac\psi2).
+$$
+
+欧拉角会出现参数奇异性，单位四元数没有欧拉角的万向节死锁；但四元数仍有双重表示 $q\sim-q$，并不意味着所有数值问题都自动消失。
+
+## 8. 姿态插值：SLERP
+
+机器人从姿态 $q_0$ 平滑过渡到 $q_1$ 时，可使用球面线性插值：
+
+$$
+\operatorname{SLERP}(q_0,q_1;t)=
+\frac{\sin((1-t)\Omega)}{\sin\Omega}q_0+
+\frac{\sin(t\Omega)}{\sin\Omega}q_1,
+\quad 0\le t\le1.
+$$
+
+其中 $\cos\Omega=q_0\cdot q_1$。通常先检查点积；若小于 0，把 $q_1$ 取反以选择短弧路径。两姿态很接近时，可改用归一化线性插值，避免数值不稳定。
+
+SLERP 能提供姿态空间中的平滑插值，但**并不自动保证机械臂关节运动无碰撞、无奇异或满足动力学限制**；仍需运动规划。
+
+## 9. 在 ROS2、TF2、MoveIt2 中如何理解
+
+`geometry_msgs/msg/Pose` 包含：
+
+- `position.x/y/z`：位置，通常单位米。
+- `orientation.x/y/z/w`：单位四元数，注意 **ROS2 消息顺序为 xyzw**。
+
+例如绕 Z 轴旋转 90° 的目标姿态：
+
+```python
+from geometry_msgs.msg import Pose
+
+pose = Pose()
+pose.position.x = 0.30
+pose.position.y = 0.20
+pose.position.z = 0.50
+
+pose.orientation.x = 0.0
+pose.orientation.y = 0.0
+pose.orientation.z = 0.7071067812
+pose.orientation.w = 0.7071067812
+```
+
+这段代码**只是构造目标位姿消息**，不会单独让机械臂运动。实际使用时还要指定参考坐标系，并交给 MoveIt2 规划和执行，或者发送给相应控制接口。
+
+齐次变换矩阵仍可写成
+
+$$
+T=\begin{bmatrix}R(q)&\mathbf p\\\mathbf0^T&1\end{bmatrix}.
+$$
+
+所以四元数与林沛群课程的旋转矩阵、齐次变换并不矛盾：**四元数提供 $R$ 的另一种表达方式**。
+
+## 10. Python 验证实验（只需 NumPy）
+
+```python
+import numpy as np
+
+# 数学顺序：w, x, y, z
+angle = np.deg2rad(90)
+q = np.array([np.cos(angle / 2), 0, 0, np.sin(angle / 2)])
+w, x, y, z = q
+
+R = np.array([
+    [1-2*(y*y+z*z), 2*(x*y-w*z), 2*(x*z+w*y)],
+    [2*(x*y+w*z), 1-2*(x*x+z*z), 2*(y*z-w*x)],
+    [2*(x*z-w*y), 2*(y*z+w*x), 1-2*(x*x+y*y)]
+])
+
+p = np.array([1., 0., 0.])
+print('q =', np.round(q, 6))
+print('R =\n', np.round(R, 6))
+print('R @ p =', np.round(R @ p, 6))
+print('unit norm =', np.linalg.norm(q))
+```
+
+预期输出：`R @ p = [0. 1. 0.]`，`unit norm = 1.0`。
+
