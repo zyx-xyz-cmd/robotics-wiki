@@ -31,6 +31,9 @@ title: 我的机器人学知识库
 强化学习，输入是状态或观测，输出通常为当前动作。当前环境设计奖励。
 ## 第五周学习总结
 总结归纳学习ros2和movelt2配置参数功能，完成IRB140机械臂SAC强化学习环境搭建，实现TCP运动控制与方块吸附释放，设计29维状态和4维动作空间，优化奖励函数，加入分阶段课程学习，完成抓取、抬升、搬运及放置流程验证，并记录训练损失与实验视频。见06-实验知识与任务，更新四元数概念在01-机器人运动学
+## 第六周学习总结
+阅读smolvla论文，重新学习transformer架构，开始看umi相关论文，确定UMI设备及系统方案
+
 This is a blank Quartz installation.
 See the [documentation](https://quartz.jzhao.xyz) for how to get started.
 
